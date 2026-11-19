@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
@@ -48,9 +48,9 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text,
       );
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
     } on AuthException catch (e) {
       setState(() => _error = e.message);
@@ -105,7 +105,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final supabase = Supabase.instance.client;
-  
+
   // 用来存当前用户的家庭ID
   String? _familyId;
   // 用来存空间节点列表
@@ -140,7 +140,7 @@ class _HomePageState extends State<HomePage> {
             .select()
             .eq('family_id', _familyId!)
             .order('created_at');
-        
+
         _spaces = List<Map<String, dynamic>>.from(spacesData);
       }
     } catch (e) {
@@ -166,7 +166,7 @@ class _HomePageState extends State<HomePage> {
   // 添加空间节点（比如加个冰箱）
   Future<void> _addSpaceNode() async {
     if (_familyId == null) return;
-    
+
     // 这里为了简单，先不弹窗，直接默认加一个“新空间”
     // 后面你可以改成弹出一个输入框让用户自己填名字
     final name = '新空间 ${_spaces.length + 1}';
@@ -175,7 +175,7 @@ class _HomePageState extends State<HomePage> {
         'family_id': _familyId,
         'name': name,
         'node_type': 'container',
-        'path': name, 
+        'path': name,
         'created_by': supabase.auth.currentUser!.id,
       });
       _loadData(); // 添加后刷新列表
@@ -200,51 +200,112 @@ class _HomePageState extends State<HomePage> {
                 );
               }
             },
-          )
+          ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _familyId == null
-              ? Center(
-                  // 如果没有家庭，显示创建按钮
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          ? Center(
+              // 如果没有家庭，显示创建按钮
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('你还没有创建家庭'),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _createFamily,
+                    child: const Text('创建我的家'),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('你还没有创建家庭'),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: _createFamily,
-                        child: const Text('创建我的家'),
+                      const Text(
+                        '空间列表',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _addSpaceNode,
+                        icon: const Icon(Icons.add),
+                        label: const Text('添加空间'),
                       ),
                     ],
                   ),
-                )
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('空间列表', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          ElevatedButton.icon(
-                            onPressed: _addSpaceNode,
-                            icon: const Icon(Icons.add),
-                            label: const Text('添加空间'),
-                          ),
-                        ],
-                      ),
-                    ),
-Expanded(
-  child: _spaces.isEmpty
-      ? const Center(child: Text('家里空空如也，点右上角添加吧'))
-      : ListView(
-          children: _buildTreeNodes(null, 0), // 从根节点(parent_id = null)开始渲染
-        ),
-),
-                  ],
                 ),
+                Expanded(
+                  child: _spaces.isEmpty
+                      ? const Center(child: Text('家里空空如也，点右上角添加吧'))
+                      : ListView(
+                          children: _buildTreeNodes(
+                            null,
+                            0,
+                          ), // 从根节点(parent_id = null)开始渲染
+                        ),
+                ),
+              ],
+            ),
     );
+  }
+
+  // 递归构建树形列表
+  List<Widget> _buildTreeNodes(String? parentId, int depth) {
+    List<Widget> widgets = [];
+
+    // 找到当前层级的所有节点
+    final children = _spaces.where((s) => s['parent_id'] == parentId).toList();
+
+    for (var node in children) {
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.only(left: depth * 24.0), // 根据层级缩进
+          child: ListTile(
+            leading: Icon(depth == 0 ? Icons.home : Icons.kitchen),
+            title: Text(node['name']),
+            trailing: IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+              // 点击这里，在当前位置内部添加一个子节点
+              onPressed: () => _addChildNode(node['id'], node['path']),
+            ),
+            // 点击节点可以展开/收起（这里简单用一个控制台打印代替）
+            onTap: () => print('点击了: ${node['name']}'),
+          ),
+        ),
+      );
+
+      // 递归调用，把当前节点的 id 作为子节点的 parentId 继续往下找
+      widgets.addAll(_buildTreeNodes(node['id'], depth + 1));
+    }
+
+    return widgets;
+  }
+
+  // 添加子节点（比如在“厨房”里添加“冰箱”）
+  Future<void> _addChildNode(String parentId, String parentPath) async {
+    if (_familyId == null) return;
+
+    final name = '子空间 ${_spaces.length + 1}';
+    try {
+      await supabase.from('space_nodes').insert({
+        'family_id': _familyId,
+        'parent_id': parentId, // 关键！告诉数据库它属于哪个父节点
+        'name': name,
+        'node_type': 'container',
+        'path': '$parentPath/$name', // 物化路径，方便以后搜索
+        'created_by': supabase.auth.currentUser!.id,
+      });
+      _loadData(); // 刷新列表
+    } catch (e) {
+      print('添加子空间失败: $e');
+    }
   }
 }
