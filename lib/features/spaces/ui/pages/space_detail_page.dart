@@ -1,12 +1,14 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/config/supabase_client.dart';
+import '../../../items/domain/entities/item_search_row.dart';
 import '../../../items/ui/item_viewmodel.dart';
 import '../../../items/ui/widgets/item_list_tile.dart';
+import '../space_photo_viewmodel.dart';
 import '../space_viewmodel.dart';
-import '../../../items/domain/entities/item_search_row.dart';
-import '../../../items/data/item_repository.dart'; // 如果 consume 用 repo
 
 class SpaceDetailPage extends ConsumerStatefulWidget {
   const SpaceDetailPage({super.key, required this.nodeId});
@@ -36,6 +38,7 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
       appBar: AppBar(title: Text(node?.name ?? '节点')),
       body: Column(
         children: [
+          _buildPhotoSection(context, ref),
           if (node?.path != null && node!.path!.isNotEmpty)
             Container(
               width: double.infinity,
@@ -207,5 +210,180 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
       ),
     );
     return result;
+  }
+
+  Widget _buildPhotoSection(BuildContext context, WidgetRef ref) {
+    final photoAsync = ref.watch(nodePhotoUrlProvider(widget.nodeId));
+
+    return photoAsync.when(
+      loading: () => const SizedBox(
+        height: 160,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => _photoPlaceholder(ref, '照片加载失败'),
+      data: (url) {
+        if (url == null) {
+          return _photoPlaceholder(ref, null);
+        }
+        return Container(
+          height: 200,
+          color: Colors.grey.shade100,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 用 signedUrl 作为 key，避免换照片后旧缓存
+              Image.network(
+                url,
+                key: ValueKey(url),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _photoPlaceholder(ref, '图片损坏'),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: PopupMenuButton<String>(
+                  onSelected: (v) async {
+                    if (v == 'change') {
+                      await _pickAndUploadPhoto(ref);
+                    } else if (v == 'delete') {
+                      await _deletePhoto(ref);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'change', child: Text('更换照片')),
+                    PopupMenuItem(value: 'delete', child: Text('删除照片')),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _photoPlaceholder(WidgetRef ref, String? message) {
+    return Container(
+      height: 160,
+      color: Colors.grey.shade100,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message != null) ...[
+              Text(message, style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 8),
+            ],
+            FilledButton.icon(
+              onPressed: () => _pickAndUploadPhoto(ref),
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('上传照片'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto(WidgetRef ref) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true, // Web 必须为 true，字节数据才在 files[0].bytes 里
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      _toast('无法读取文件');
+      return;
+    }
+    if (bytes.length > 5 * 1024 * 1024) {
+      _toast('照片不能超过 5MB');
+      return;
+    }
+
+    final member = ref.read(myMembershipProvider).value;
+    if (member == null) {
+      _toast('未找到家庭成员记录');
+      return;
+    }
+
+    final ext = (file.extension ?? 'jpg').toLowerCase();
+
+    try {
+      final repo = ref.read(spacePhotoRepositoryProvider);
+
+      // 如果已有旧照片，先尝试删除旧路径（失败不阻塞）
+      final nodes = ref.read(nodesProvider).value ?? const [];
+      final currentNode = nodes.where((n) => n.id == widget.nodeId);
+      final oldPath = currentNode.isEmpty ? null : currentNode.first.photoUrl;
+      if (oldPath != null && oldPath.isNotEmpty) {
+        try {
+          await repo.delete(oldPath);
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      final path = await repo.upload(
+        familyId: member.familyId,
+        nodeId: widget.nodeId,
+        bytes: bytes,
+        extension: ext,
+      );
+      await repo.savePhotoPath(nodeId: widget.nodeId, storagePath: path);
+
+      ref.invalidate(nodesProvider);
+      // nodePhotoUrlProvider 依赖 nodesProvider，会自动失效重取
+    } catch (e) {
+      _toast('上传失败: $e');
+    }
+  }
+
+  Future<void> _deletePhoto(WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除照片'),
+        content: const Text('确定删除当前节点的照片吗？物品列表不受影响。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final nodes = ref.read(nodesProvider).value ?? const [];
+    final matches = nodes.where((n) => n.id == widget.nodeId);
+    if (matches.isEmpty) return;
+    final path = matches.first.photoUrl;
+    if (path == null) return;
+
+    try {
+      final repo = ref.read(spacePhotoRepositoryProvider);
+      try {
+        await repo.delete(path);
+      } catch (_) {
+        /* 文件可能已不存在，忽略 */
+      }
+      await repo.savePhotoPath(nodeId: widget.nodeId, storagePath: null);
+      ref.invalidate(nodesProvider);
+      _toast('已删除照片');
+    } catch (e) {
+      _toast('删除失败: $e');
+    }
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }

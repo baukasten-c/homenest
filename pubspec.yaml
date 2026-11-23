@@ -38,6 +38,7 @@ dependencies:
   supabase_flutter: ^2.18.3
   go_router: ^17.5.0           # 新增：路由
   flutter_riverpod: ^3.5.0     # 新增：状态管理
+  file_picker: ^8.1.0
 
 dev_dependencies:
   flutter_test:
