@@ -4,7 +4,7 @@ import '../../../../core/utils/json_utils.dart';
 class ItemSearchRow {
   final String itemId;
   final String familyId;
-  final String spaceNodeId;
+  final String? spaceNodeId;
   final String itemName;
   final int quantity;
   final DateTime? expiryDate;
@@ -19,7 +19,7 @@ class ItemSearchRow {
   const ItemSearchRow({
     required this.itemId,
     required this.familyId,
-    required this.spaceNodeId,
+    this.spaceNodeId,
     required this.itemName,
     required this.quantity,
     this.expiryDate,
@@ -35,7 +35,7 @@ class ItemSearchRow {
   factory ItemSearchRow.fromMap(Map<String, dynamic> m) => ItemSearchRow(
         itemId: m['item_id'] as String,
         familyId: m['family_id'] as String,
-        spaceNodeId: m['space_node_id'] as String,
+        spaceNodeId: m['space_node_id'] as String?,
         itemName: m['item_name'] as String,
         quantity: (m['quantity'] as num?)?.toInt() ?? 0,
         expiryDate: asDate(m['expiry_date']),

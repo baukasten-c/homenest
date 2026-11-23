@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/ui/pages/login_page.dart';
 import '../../features/spaces/ui/pages/space_detail_page.dart';
 import '../../features/spaces/ui/pages/space_tree_page.dart';
+import '../../features/items/ui/pages/item_form_page.dart';
 import 'supabase_client.dart';
 
 final appRouter = GoRouter(
@@ -29,6 +30,20 @@ final appRouter = GoRouter(
       path: '/space/:nodeId',
       builder: (_, state) =>
           SpaceDetailPage(nodeId: state.pathParameters['nodeId']!),
+      routes: [
+        GoRoute(
+          path: 'item/new',
+          builder: (_, state) =>
+              ItemFormPage(nodeId: state.pathParameters['nodeId']!),
+        ),
+        GoRoute(
+          path: 'item/:itemId/edit',
+          builder: (_, state) => ItemFormPage(
+            nodeId: state.pathParameters['nodeId']!,
+            itemId: state.pathParameters['itemId'],
+          ),
+        ),
+      ],
     ),
   ],
 );
