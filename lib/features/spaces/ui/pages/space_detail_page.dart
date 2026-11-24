@@ -9,6 +9,7 @@ import '../../../items/ui/item_viewmodel.dart';
 import '../../../items/ui/widgets/item_list_tile.dart';
 import '../space_photo_viewmodel.dart';
 import '../space_viewmodel.dart';
+import '../../../items/domain/entities/item_location.dart';
 
 class SpaceDetailPage extends ConsumerStatefulWidget {
   const SpaceDetailPage({super.key, required this.nodeId});
@@ -121,6 +122,8 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
     final saved = await context.push<bool>(
       '/space/${widget.nodeId}/item/$itemId/edit',
     );
+
+    // 物品字段可能改了：只有 saved==true 才刷新列表
     if (saved == true) {
       ref.invalidate(itemsByNodeProvider(args));
       ref.invalidate(
@@ -130,6 +133,9 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
         )),
       );
     }
+
+    // 标记位置可能改了：无论是否保存都刷新（用户可能只动了 marker 就返回）
+    ref.invalidate(nodeMarkersProvider(widget.nodeId));
   }
 
   Future<void> _consume(ItemSearchRow row, {int? qty}) async {
@@ -152,6 +158,7 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
           includeDescendants: !_includeDescendants,
         )),
       );
+      ref.invalidate(nodeMarkersProvider(widget.nodeId));
       if (!mounted) return;
       final left = row.quantity - n;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,6 +221,8 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
 
   Widget _buildPhotoSection(BuildContext context, WidgetRef ref) {
     final photoAsync = ref.watch(nodePhotoUrlProvider(widget.nodeId));
+    final markers =
+        ref.watch(nodeMarkersProvider(widget.nodeId)).value ?? const [];
 
     return photoAsync.when(
       loading: () => const SizedBox(
@@ -225,18 +234,44 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
         if (url == null) {
           return _photoPlaceholder(ref, null);
         }
-        return Container(
-          height: 200,
-          color: Colors.grey.shade100,
-          child: Stack(
-            fit: StackFit.expand,
+        final maxH = MediaQuery.of(context).size.height * 0.35;
+        final aspectAsync = ref.watch(imageAspectRatioProvider(url));
+        return aspectAsync.when(
+          loading: () => const SizedBox(
+            height: 200,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, __) => _photoPlaceholder(ref, '照片加载失败'),
+          data: (ratio) => Stack(
             children: [
-              // 用 signedUrl 作为 key，避免换照片后旧缓存
-              Image.network(
-                url,
-                key: ValueKey(url),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _photoPlaceholder(ref, '图片损坏'),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: maxH,
+                  maxWidth: double.infinity,
+                ),
+                child: AspectRatio(
+                  aspectRatio: ratio,
+                  child: LayoutBuilder(
+                    builder: (ctx, constraints) {
+                      final w = constraints.maxWidth;
+                      final h = constraints.maxHeight;
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            url,
+                            key: ValueKey(url),
+                            fit: BoxFit.fill,
+                            errorBuilder: (_, __, ___) =>
+                                _photoPlaceholder(ref, '图片损坏'),
+                          ),
+                          // 叠加每个 marker
+                          for (final m in markers) _buildMarker(m, w, h),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
               Positioned(
                 top: 4,
@@ -259,6 +294,44 @@ class _SpaceDetailPageState extends ConsumerState<SpaceDetailPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMarker(ItemLocation m, double containerW, double containerH) {
+    const size = 32.0;
+    final left = (m.markerX * containerW) - (size / 2);
+    final top = (m.markerY * containerH) - (size / 2);
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: GestureDetector(
+        onTap: () => _openEditItemForm(m.itemId),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: 0.85),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '${m.itemQuantity ?? ''}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

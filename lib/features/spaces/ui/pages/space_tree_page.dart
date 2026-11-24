@@ -2,15 +2,23 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'dart:async'; // unawaited
+
 import '../../../../core/config/supabase_client.dart';
 import '../../domain/entities/space_node.dart';
 import '../space_viewmodel.dart';
 
-class SpaceTreePage extends ConsumerWidget {
+class SpaceTreePage extends ConsumerStatefulWidget {
   const SpaceTreePage({super.key});
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SpaceTreePage> createState() => _SpaceTreePageState();
+}
+
+class _SpaceTreePageState extends ConsumerState<SpaceTreePage> {
+  bool _loggingOut = false;
+  // 原来的 build 和 _buildTreeNodes 等方法搬进来
+  @override
+  Widget build(BuildContext context) {
     final asyncNodes = ref.watch(nodesProvider);
 
     return Scaffold(
@@ -21,8 +29,12 @@ class SpaceTreePage extends ConsumerWidget {
             tooltip: '退出登录',
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await supabase.auth.signOut();
-              if (context.mounted) context.go('/login');
+              setState(() => _loggingOut = true);
+              try {
+                await supabase.auth.signOut();
+              } finally {
+                if (mounted) context.go('/login');
+              }
             },
           ),
         ],
@@ -31,6 +43,9 @@ class SpaceTreePage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('加载失败: $e')),
         data: (nodes) {
+          if (_loggingOut) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final roots = nodes.where((n) => n.parentId == null).toList()
             ..sort((a, b) => a.name.compareTo(b.name));
           if (roots.isEmpty) {
@@ -93,10 +108,13 @@ class SpaceTreePage extends ConsumerWidget {
     try {
       // TODO(迁移): 如果你原来是用 path = "父.path/name" 拼接，保留；
       // 如果在 DB trigger 里维护，这里传 null 即可
-      final path =
-          parent.path != null ? '${parent.path}/$name' : '${parent.name}/$name';
+      final path = parent.path != null
+          ? '${parent.path}/$name'
+          : '${parent.name}/$name';
 
-      await ref.read(spaceRepositoryProvider).addChild(
+      await ref
+          .read(spaceRepositoryProvider)
+          .addChild(
             familyId: member.familyId,
             parentId: parent.id,
             name: name,
@@ -122,10 +140,13 @@ class SpaceTreePage extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('确定')),
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('确定'),
+          ),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import '../../features/auth/ui/pages/login_page.dart';
 import '../../features/spaces/ui/pages/space_detail_page.dart';
 import '../../features/spaces/ui/pages/space_tree_page.dart';
 import '../../features/items/ui/pages/item_form_page.dart';
+import '../../features/items/ui/pages/item_marker_page.dart';
 import 'supabase_client.dart';
 
 final appRouter = GoRouter(
@@ -41,6 +42,13 @@ final appRouter = GoRouter(
           builder: (_, state) => ItemFormPage(
             nodeId: state.pathParameters['nodeId']!,
             itemId: state.pathParameters['itemId'],
+          ),
+        ),
+        GoRoute(
+          path: 'item/:itemId/mark',
+          builder: (_, state) => ItemMarkerPage(
+            nodeId: state.pathParameters['nodeId']!,
+            itemId: state.pathParameters['itemId']!,
           ),
         ),
       ],

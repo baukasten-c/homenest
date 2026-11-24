@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/space_photo_repository.dart';
 import 'space_viewmodel.dart';
+import '../../../../core/utils/image_info.dart';
 
 final spacePhotoRepositoryProvider = Provider<SpacePhotoRepository>((ref) {
   return SpacePhotoRepository();
@@ -17,4 +18,10 @@ final nodePhotoUrlProvider =
   final node = matches.first;
   if (node.photoUrl == null || node.photoUrl!.isEmpty) return null;
   return ref.read(spacePhotoRepositoryProvider).signedUrl(node.photoUrl);
+});
+
+/// 给定照片 URL，返回宽高比。详情页和标记页共用。
+final imageAspectRatioProvider =
+    FutureProvider.autoDispose.family<double, String>((ref, url) async {
+  return getImageAspectRatio(url);
 });

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../core/config/supabase_client.dart';
 import '../../auth/domain/entities/family_member.dart';
@@ -16,9 +17,15 @@ final authUserProvider = StreamProvider<User?>((ref) {
   // 立刻给出当前值，避免首帧等待
   final initial = supabase.auth.currentUser;
   // 监听变化
-  final stream = supabase.auth.onAuthStateChange
-      .map((event) => event.session?.user);
-  return stream;
+  final stream = supabase.auth.onAuthStateChange.map(
+    (event) => event.session?.user,
+  );
+  return supabase.auth.onAuthStateChange.map((event) {
+    debugPrint(
+      '[auth] event=${event.event} email=${event.session?.user.email}',
+    );
+    return event.session?.user;
+  });
 });
 
 /// 当前用户的家庭成员记录。

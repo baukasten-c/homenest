@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../spaces/ui/space_viewmodel.dart';
 import '../data/item_repository.dart';
 import '../domain/entities/item_search_row.dart';
+import '../domain/entities/item_location.dart'; 
 
 final itemRepositoryProvider = Provider<ItemRepository>((ref) {
   return ItemRepository();
@@ -37,4 +38,19 @@ final itemsByNodeProvider = FutureProvider.autoDispose
   }
 
   return ref.read(itemRepositoryProvider).listByNodeIds(nodeIds.toList());
+});
+
+/// 当前物品在指定节点上的标记（null = 没标过）
+final itemMarkerProvider = FutureProvider.autoDispose
+    .family<ItemLocation?, ({String itemId, String nodeId})>((ref, args) {
+  return ref.read(itemRepositoryProvider).getMarker(
+        itemId: args.itemId,
+        nodeId: args.nodeId,
+      );
+});
+
+/// 某节点照片上所有可见 marker（quantity > 0）
+final nodeMarkersProvider = FutureProvider.autoDispose
+    .family<List<ItemLocation>, String>((ref, nodeId) {
+  return ref.read(itemRepositoryProvider).listMarkersByNode(nodeId);
 });

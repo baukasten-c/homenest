@@ -159,8 +159,9 @@ class _ItemFormPageState extends ConsumerState<ItemFormPage> {
         content: Text('确定删除「${_nameController.text}」吗？'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -224,6 +225,18 @@ class _ItemFormPageState extends ConsumerState<ItemFormPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (widget.isEditing) ...[
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const Icon(Icons.location_on_outlined),
+                      title: const Text('在照片上标记位置'),
+                      subtitle: const Text('在当前节点的实景照片上点选物品位置'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _openMarkerPage,
+                    ),
+                  ),
+                ],
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
@@ -342,5 +355,15 @@ class _ItemFormPageState extends ConsumerState<ItemFormPage> {
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _openMarkerPage() async {
+    final saved = await context.push<bool>(
+      '/space/${widget.nodeId}/item/${widget.itemId}/mark',
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('标记已更新')));
+    }
   }
 }
