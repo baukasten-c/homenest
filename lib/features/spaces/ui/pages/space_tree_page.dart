@@ -7,6 +7,7 @@ import 'dart:async'; // unawaited
 import '../../../../core/config/supabase_client.dart';
 import '../../domain/entities/space_node.dart';
 import '../space_viewmodel.dart';
+import '../../../notifications/ui/notification_service.dart';
 
 class SpaceTreePage extends ConsumerStatefulWidget {
   const SpaceTreePage({super.key});
@@ -16,10 +17,20 @@ class SpaceTreePage extends ConsumerStatefulWidget {
 
 class _SpaceTreePageState extends ConsumerState<SpaceTreePage> {
   bool _loggingOut = false;
+  bool _hasScannedNotifications = false;
   // 原来的 build 和 _buildTreeNodes 等方法搬进来
   @override
   Widget build(BuildContext context) {
     final asyncNodes = ref.watch(nodesProvider);
+
+    // 新增：数据加载成功后，静默触发一次通知扫描
+    if (asyncNodes.hasValue && !_hasScannedNotifications) {
+      _hasScannedNotifications = true;
+      // 放到微任务里，不阻塞当前帧渲染
+      Future.microtask(() {
+        ref.read(notificationServiceProvider).refreshExpiryNotifications();
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
