@@ -56,7 +56,7 @@ class NotificationService {
     final suffix = count > 3 ? ' 等' : '';
     final title = '$count 件物品即将过期';
     final body = '$previewList$suffix将在 3 天内过期，记得处理哦。';
-    final testTime = DateTime.now().add(const Duration(minutes: 2));
+    final testTime = DateTime.now().add(const Duration(minutes: 30));
 
     // 每天早上 8:00 提醒
     await _repo.scheduleExpiryNotification(
